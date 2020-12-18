@@ -1,0 +1,176 @@
+#!/usr/bin/python3
+
+'''
+Usage example
+
+# Send a message
+slack-cmd -t "xoxb-XXXXXXXX-YYYYYYYYYYYYY-ZZZZZZZZZZZZZZZZZZZZZZ" -c D014F3MSW2C "Hello"
+
+# Send a message using stdin
+tail /var/log/messages | slack-cmd -t "xoxb-XXXXXXXX-YYYYYYYYYYYYY-ZZZZZZZZZZZZZZZZZZZZZZ" -c D014F3MSW2C
+
+# Send a file
+slack-cmd -t "xoxb-XXXXXXXX-YYYYYYYYYYYYY-ZZZZZZZZZZZZZZZZZZZZZZ" -c D014F3MSW2C --upload ./filename -v
+
+'''
+
+import sys
+import time
+import json
+import random
+import argparse
+
+from slack import WebClient
+from slack.errors import SlackApiError
+
+parser = argparse.ArgumentParser()
+parser.add_argument("message", help="Post a message on slack", nargs="?", default=False)
+parser.add_argument("--code", help="Format the message as code (using ```)", action="store_true", default=False)
+parser.add_argument("--channel","-c", help="Channel where to send the message")
+parser.add_argument("--delete", help="Option to delete our messages: set the number of messages to delete, by default it deletes the last one")
+parser.add_argument("--verbose","-v", help="Print the whole answer from slack", action="store_true", default=False)
+parser.add_argument("--upload", help="Send file instead of a message. Use this argument to set the file path")
+parser.add_argument("--token","-t", help="SLACK Token, please")
+args = parser.parse_args()
+
+if args.token:
+    b_token=args.token
+else:
+    print("A token is required to interact with slack APIs")
+    exit()
+
+def main():
+
+    if args.channel:
+        slack_channel = args.channel
+    else:
+        print("A target channel (-c) is required")
+
+    
+    if args.upload:
+        slack_return = slack_upload(b_token, args.upload, slack_channel)
+        print(slack_return[0])
+
+        if args.verbose:
+            print(slack_return[1])
+
+        exit()
+
+    if args.delete:
+        num_msgs = args.delete
+        slack_delete(slack_channel, b_token, num_msgs)
+        exit()
+
+    if args.message:
+    
+        slack_message = ""
+        
+        if not sys.stdin.isatty():
+            slack_message = sys.stdin.read().strip()
+        elif args.message:
+            slack_message = args.message
+        else:
+            print("No input")
+
+        if args.code:
+            slack_message = '```' + slack_message + '```'
+            
+        slack_return = slack_post(b_token, slack_message, slack_channel)
+        print(slack_return[0])
+
+        if args.verbose:
+            print(slack_return[1])
+
+
+
+def slack_upload(b_token, file_path, slack_channel):
+    response = { 'ok': False }
+    client = WebClient(token=b_token)
+    print("Upload file to: " + slack_channel )
+    
+    try:
+        # NOTE: When using blocks to format the message, text propery will still be the notification's text.
+        response = client.files_upload(
+                    channels = slack_channel,
+                    file = file_path,
+                    username = 'TheCloudBot (©)'
+                    )
+        assert response["file"]
+
+    except SlackApiError as e:
+      # You will get a SlackApiError if "ok" is False
+      assert e.response["ok"] is False
+      assert e.response["error"]  # str like 'invalid_auth', 'channel_not_found'
+      print(f"Got an error: {e.response['error']}")
+
+    if response.get('ok') == True:
+        output =  "Message sent"
+
+    else:
+        output =  "Error while sending the message"
+    
+    return [output, response]
+
+
+def slack_post(b_token, slack_message, slack_channel):
+
+    response = { 'ok': False }
+    client = WebClient(token=b_token)
+    print("Posting new message to: " + slack_channel )
+    
+    try:
+        # NOTE: When using blocks to format the message, text propery will still be the notification's text.
+        response = client.chat_postMessage(
+                    channel = slack_channel,
+                    text = slack_message,
+                    username = 'TheCloudBot (©)',
+                    blocks = [
+                              {
+                                  "type": "section",
+                                  "text": {
+                                      "type": "mrkdwn",
+                                      "text": slack_message
+                                  }
+                              }
+                            ]
+                        )
+
+
+    except SlackApiError as e:
+      # You will get a SlackApiError if "ok" is False
+      assert e.response["error"]  # str like 'invalid_auth', 'channel_not_found'
+
+    if response.get('ok') == True:
+        output =  "Message sent"
+
+    else:
+        output =  "Error while sending the message"
+    
+    return [output, response]
+
+
+def slack_delete(slack_channel, b_token, num_msgs):
+
+    client = WebClient(token=b_token)
+    
+    response = client.conversations_history( channel=slack_channel, limit=num_msgs, )
+    
+    assert response["ok"]
+    
+    messages = response['messages']
+    
+    for message in messages:
+        message_ts = message.get('ts')
+        message_text = message.get('text')
+      
+        if message_ts:
+
+            try:
+                print("Deleting message with text " + message_text + " and ts" + message_ts)
+                client.chat_delete(channel=slack_channel, ts=message_ts)
+            except:
+                print("Cannot delete not owned message with text " + message_text + " and ts" + message_ts)
+                
+
+
+if __name__ == '__main__': main()
