@@ -1,19 +1,5 @@
 #!/usr/bin/python3
 
-'''
-Usage example
-
-# Send a message
-slack-cmd -t "xoxb-XXXXXXXX-YYYYYYYYYYYYY-ZZZZZZZZZZZZZZZZZZZZZZ" -c D014F3MSW2C "Hello"
-
-# Send a message using stdin
-tail /var/log/messages | slack-cmd -t "xoxb-XXXXXXXX-YYYYYYYYYYYYY-ZZZZZZZZZZZZZZZZZZZZZZ" -c D014F3MSW2C
-
-# Send a file
-slack-cmd -t "xoxb-XXXXXXXX-YYYYYYYYYYYYY-ZZZZZZZZZZZZZZZZZZZZZZ" -c D014F3MSW2C --upload ./filename -v
-
-'''
-
 import sys
 import time
 import json
